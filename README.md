@@ -7,16 +7,70 @@ they are not an inventory of implemented features.
 
 ## Current implementation
 
-The repository contains a Spring Boot backend scaffold in `apps/api/`: an
-application entry point, dependency/configuration files, and a context-loading
-test. There are no application REST controllers, domain services, entities,
-repositories, Flyway migrations, Telegram handlers, or AI tools yet. Dependencies
-alone do not implement those capabilities.
+The repository contains a Spring Boot backend in `apps/api/` targeting Java 25 and
+Spring Boot 4.1.1. Code preparation and static inspection for a minimal, plain-text
+Telegram echo route have been accepted.
 
-The React dashboard/Telegram Mini App and Docker infrastructure are planned.
-There is currently no `apps/web/`, `infra/`, Compose file, or frontend package
-manifest. Habits, finance, goals, reminders, analytics, and Excel export remain
-product requirements.
+### Telegram echo integration (`telegram-echo` profile)
+
+The minimal echo route is implemented in `apps/api/` and managed locally via root
+development scripts:
+
+- **Echo contract**: Incoming regular text messages produce an exact text echo in
+  the originating chat (and message thread/topic when provided), preserving Unicode,
+  whitespace, and line breaks without markup transformations. Non-text updates and
+  empty messages are ignored.
+- **Credential & registration rule**: `TELEGRAM_BOT_TOKEN` is loaded from the root `.env`
+  file and bound to `lifeos.telegram.bot-token`. An empty or blank token skips bot
+  registration, network calls, and polling sessions; the launcher fails early if the
+  token is missing or blank. Real credentials must never be committed.
+- **Dedicated profile**: The `telegram-echo` Spring profile isolates the echo flow,
+  excluding DataSource, JPA, Flyway migrations, and Spring AI auto-configurations so
+  that local development requires no database, vector store, or model provider.
+- **Component wiring & Jackson compatibility**: Components use Lombok `@RequiredArgsConstructor`
+  for constructor-based dependency injection. Because Spring Boot 4.1.1 auto-configures
+  Jackson 3 (`tools.jackson.databind.ObjectMapper`) while the TelegramBots 10.3.0 library
+  requires Jackson 2 (`com.fasterxml.jackson.databind.ObjectMapper`), an explicitly owned
+  shared Jackson 2 `ObjectMapper` bean is injected into the Telegram client and polling
+  application without interfering with Boot's HTTP serialization. See the
+  [API README](apps/api/README.md) for detailed configuration, properties, and component internals.
+- **Threading architecture & execution model**:
+  - *Virtual threads*: Spring Boot 4.1.1 virtual thread execution defaults to disabled
+    (`spring.threads.virtual.enabled=false`), and no opt-in is configured; Java 25 public
+    `Thread` constructors create platform threads.
+  - *Platform threading*: Long-polling runs on a repository-created Spring scheduler bean
+    (`telegramPollingExecutor`), providing a library-used single daemon platform worker thread
+    named `telegram-polling`. Outbound HTTP sends use OkHttp's library-owned platform worker threads.
+  - *Serial execution & blocking sends*: TelegramBots 10.3.0 invokes update consumption inline
+    on the single polling thread, and outbound message dispatch synchronously blocks on the
+    underlying HTTP request (`executeAsync().get()`). Consequently, slow outbound sends delay
+    subsequent update processing and polling cycles.
+  - *Orderly shutdown*: On application context close or shutdown, cancellation of queued and
+    in-flight calls is requested via `dispatcher().cancelAll()` and executor shutdown is initiated,
+    but termination is not awaited (`awaitTermination` is not invoked), and cancellation timing has
+    not been measured at runtime.
+  - *Source-selected description*: All threading characteristics describe source-selected
+    configuration and library design; runtime execution, thread allocation, latencies, and
+    cancellation timing remain unobserved.
+
+> [!NOTE]
+> **Static inspection status and limits**:
+> Root environment templates (`.env.example`, `.env`), ignore rules (`.gitignore`), and the
+> development launcher (`scripts/dev-api.sh`) have passed static review.
+> Backend Telegram echo source and offline tests in `apps/api/` have been accepted
+> under static inspection.
+>
+> Java was unavailable in the verification environment; Maven builds, test suite execution
+> (including `@SpringBootTest` and offline unit tests), and formatter checks were **not run**.
+> Neither `scripts/dev-api.sh` nor the Spring Boot API or Telegram bot has been executed,
+> and live Telegram echo behavior against Telegram endpoints remains **unexercised**.
+
+### Planned product capabilities
+
+There are currently no application REST controllers, domain entities, repositories,
+Flyway database migrations, or AI agent tools. Habits, tasks, finances, goals, reminders,
+analytics, and Excel export remain planned product requirements. The React dashboard/Telegram
+Mini App (`apps/web/`) and Docker infrastructure (`infra/`) also remain planned.
 
 ## Declared backend stack
 
@@ -60,6 +114,62 @@ known limitations. Packaging with skipped tests does not prove application
 startup. A datasource and enabled AI provider configuration are not supplied by
 the checked-in YAML, so this is not a ready-to-run product.
 
+### Running the development API launcher (telegram-echo)
+
+A development launcher is provided at `scripts/dev-api.sh` to start the backend
+with the dedicated `telegram-echo` Spring profile:
+
+1. **Configure local environment**:
+   Edit the provided root `.env` file directly to set your bot token:
+   ```sh
+   TELEGRAM_BOT_TOKEN='your_bot_token_here'
+   ```
+   If `.env` is absent, create it using a non-overwriting copy:
+   ```sh
+   cp -n .env.example .env
+   ```
+   Never overwrite an existing `.env` file or pre-existing configuration values.
+2. **Credential requirement**:
+   `TELEGRAM_BOT_TOKEN` must be set to a valid bot token obtained from
+   [@BotFather](https://t.me/botfather). The launcher validates that the token is
+   non-blank and fails early if it is missing or empty.
+3. **Prerequisites**:
+   - Bash shell.
+   - JDK 25 target (or compatible newer major): both runtime (`java`) and compiler
+     (`javac`) available under `JAVA_HOME` or on `PATH`.
+4. **Execution**:
+   - When running from the repository root:
+     ```sh
+     ./scripts/dev-api.sh
+     ```
+   - When running from any other directory, invoke the script using its actual path:
+     ```sh
+     /path/to/lifeos/scripts/dev-api.sh
+     ```
+
+**Launcher operation, environment parsing, and precedence**:
+- **Parsing and precedence**: `scripts/dev-api.sh` resolves the repository root reliably
+  from its own script location and sources root `.env` directly in Bash with automatic
+  variable export enabled (`set -a`). Root `.env` assignments become exported variables
+  in the child process environment. Unrelated inherited environment variables remain intact
+  in the child process. Sourcing `.env` does not alter parent shell state or rewrite
+  values in files on disk. The `.env` file must contain trusted, Bash-compatible
+  assignments (`KEY='value'`).
+- **Diagnostic suppression & process security**: Command tracing is disabled and stderr
+  is suppressed during `.env` sourcing to prevent Bash interpreter diagnostics from
+  leaking sensitive values into trace or terminal logs. The bot token is passed to the
+  child process strictly via the exported environment (`TELEGRAM_BOT_TOKEN`), never via
+  JVM command-line system properties (`-D...`) or process arguments.
+- **Maven execution**: The launcher enters `apps/api` and invokes the fixed launch command:
+  `exec sh ./mvnw spring-boot:run -Dspring-boot.run.profiles=telegram-echo`.
+  Unrestricted argument passthrough forwarding is omitted to preserve the fixed
+  `telegram-echo` profile route. First Maven use will download Maven 3.10.0 and project
+  dependencies from Maven repositories.
+- **Status**: Root environment templates and the development launcher passed static review,
+  and backend echo source in `apps/api/` was accepted under static inspection. Because Java
+  was unavailable in the environment, builds and tests were not run, and neither the launcher
+  nor the API/bot was executed. Live Telegram echo interaction remains unexercised.
+
 ## Repository guidance
 
 ```text
@@ -69,6 +179,10 @@ lifeos/
 ├── docs/
 │   ├── LifeOS_PRD.md     # Intended product behavior
 │   └── WORKSPACE_PROTOCOL.md
+├── scripts/
+│   └── dev-api.sh       # Local development API launcher (telegram-echo)
+├── .env.example         # Environment configuration template
+├── .gitignore           # Root Git ignore rules (protects .env)
 ├── AGENTS.md            # Repository agent instructions
 └── README.md
 ```

@@ -1,3 +1,7 @@
 spring:
   application:
     name: LifeOS
+
+lifeos:
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}

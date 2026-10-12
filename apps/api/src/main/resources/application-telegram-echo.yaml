@@ -1,0 +1,21 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceInitializationAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+      - org.springframework.ai.model.deepseek.autoconfigure.DeepSeekChatAutoConfiguration
+      - org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration
+      - org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration
+  ai:
+    chat:
+      client:
+        enabled: false
+    model:
+      chat: none
+
+logging:
+  level:
+    org.telegram.telegrambots.longpolling.BotSession: "OFF"

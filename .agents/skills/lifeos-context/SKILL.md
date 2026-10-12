@@ -12,7 +12,8 @@ Scope: repository-level navigation and cross-application relationships, **not** 
 Read [root instructions](../../../AGENTS.md), the
 [workspace protocol](../../../docs/WORKSPACE_PROTOCOL.md), and
 [root README](../../../README.md). The only current app is the Spring Boot
-scaffold at `apps/api/`; `apps/web/`, `infra/`, Compose files,
+backend at `apps/api/` (containing the application scaffold and prepared
+telegram-echo integration); `apps/web/`, `infra/`, Compose files,
 `docs/architecture/`, and `.agents/context/` are absent. The README owns current
 status; `docs/LifeOS_PRD.md` owns intended behavior. Recheck the tree before
 treating a planned component as available.
@@ -39,6 +40,7 @@ treating a planned component as available.
 | Area | Likely path |
 | --- | --- |
 | Backend application | `apps/api/` |
+| Development scripts | `scripts/` |
 | Web application (when present) | `apps/web/` |
 | Deployment/infrastructure (when present) | `infra/` and root Compose files |
 | Product/architecture documents | `docs/` |

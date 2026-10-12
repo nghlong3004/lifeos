@@ -13,12 +13,17 @@ The [API README](../../../apps/api/README.md),
 [API instructions](../../../apps/api/AGENTS.md),
 [POM](../../../apps/api/pom.xml), and
 [configuration](../../../apps/api/src/main/resources/application.yaml) are the
-current entry points. The app contains a Spring Boot entry point and a
-context-loading test. Domain features, custom security, migrations, handlers,
-and tools are not implemented; `.agents/context/api/` does not exist.
+current entry points. The app contains a Spring Boot entry point, a
+context-loading test, and a minimal plain-text Telegram echo integration in
+`me.nghlong3004.lifeos.telegram` (`telegram-echo` profile) driven by a dedicated
+single-thread platform scheduler and owned `OkHttpClient` transport, supported by
+shared Jackson 2 mapper configuration in `me.nghlong3004.lifeos.config`. Other domain features,
+custom security, migrations, and tools are not implemented; `.agents/context/api/`
+does not exist.
 
 Run Maven from `apps/api/` with a JDK compatible with Java 25:
-`sh ./mvnw -DskipTests package` for packaging and `sh ./mvnw test` for tests
+`sh ./mvnw -DskipTests package` for packaging, `sh ./mvnw test -Dtest=Telegram*Test,Jackson2ConfigurationTest`
+for the isolated unit tests, and `sh ./mvnw test` for full tests
 (`mvnw.cmd` on Windows). The Unix wrapper is not tracked as executable.
 Packaging without test execution is not a startup or test pass. Consult the
 README for database/provider prerequisites; no test fixture provisions them.
@@ -48,7 +53,8 @@ and mapper interfaces are not currently configured/implemented.
 | Persistence | Entity, repository, `src/main/resources/db/migration/` |
 | Mapping | MapStruct mapper and DTOs |
 | AI & tool calls | Provider configuration, tool handlers, validation, confirmation |
-| Telegram & reminders | Bot handlers, scheduling, notification persistence |
+| Telegram & reminders | `me.nghlong3004.lifeos.telegram`, scheduling, notification persistence |
+| Shared configuration | `me.nghlong3004.lifeos.config` (e.g. `Jackson2Configuration`) |
 | Security | Authentication, authorization, ownership checks |
 | Configuration | `pom.xml`, `application*.yaml` (also check for `.yml`/`.properties` if added) |
 | Tests | `src/test/` |
@@ -80,7 +86,7 @@ Do not force updates for cosmetic edits or bug fixes that leave existing context
 
 ## Gotchas
 
-- `application.yaml` sets only the application name. Declared PostgreSQL, AI, security, and Testcontainers dependencies do not supply credentials, authorization policy, or fixtures.
+- `application.yaml` sets the application name and `lifeos.telegram.bot-token` (`TELEGRAM_BOT_TOKEN`); `application-telegram-echo.yaml` configures the minimal echo profile. Declared PostgreSQL, AI, security, and Testcontainers dependencies do not supply credentials, authorization policy, or fixtures.
 - Do not infer runtime success or an endpoint contract from starter dependencies. Verify effects in an appropriately configured environment and report untested integrations.
 
 ## Examples

@@ -4,12 +4,23 @@ Scope: `apps/api/`. These instructions supplement the repository-root `AGENTS.md
 
 ## Current Implementation
 
-Read [README.md](README.md) for commands, configuration, and limits. This app is
-a Spring Boot scaffold, not an implemented habit/finance/Telegram service.
-`pom.xml` declares integrations; source and tests determine which are wired.
-There are no migrations, feature packages, custom security configuration, or
-configured formatter task yet. The rules below govern new work; they do not
-claim those components already exist.
+Read [README.md](README.md) for commands, configuration, and limits. This app
+provides a minimal plain-text Telegram echo integration under
+`me.nghlong3004.lifeos.telegram` activated via the `telegram-echo` profile, supported
+by a shared Jackson 2 mapper configuration under `me.nghlong3004.lifeos.config`.
+`TelegramConfiguration` defines the inspectable bean graph (client, owned `OkHttpClient`
+transport, dedicated single-thread scheduler, and native `TelegramBotsLongPollingApplication`),
+reusing the shared Jackson 2 `ObjectMapper`. Polling and echo execution run serially on a
+dedicated platform thread (`telegram-polling`) without virtual-thread opt-in.
+`TelegramBotLifecycle` manages registration and owns full resource cleanup (session, polling
+application, scheduler, and HTTP transport) across session stop, application destruction, and
+startup failure.
+Components use Lombok `@RequiredArgsConstructor` for constructor dependency injection.
+Other domain features (habits, finances, AI model tools, custom security) remain
+unimplemented. `pom.xml` declares integrations; source and tests determine which
+are wired. There are no migrations, other feature packages, custom security
+configuration, or configured formatter task yet. The rules below govern new work;
+they do not claim those components already exist.
 
 ## Before Editing
 
@@ -27,7 +38,7 @@ claim those components already exist.
 - **Clean Code is required:** descriptive names, focused classes/methods, low coupling, no duplicated business logic, no speculative abstractions, and no overengineering.
 - **Every newly created Java class, interface, enum, or record must have type-level Javadoc** with `@author nghlong3004 (Long Nguyen Hoang)` and `@since` set to its creation date in `M/d/yyyy` format (example: `10/11/2026`). Place Javadoc immediately before type annotations/declaration; preserve existing `@since` when modifying a file.
 - Organize code by feature; keep REST controllers, Telegram handlers, schedulers, and AI tools as thin adapters. Put business decisions in the owning application/domain service.
-- Prefer constructor injection, immutable API payloads (`record`), and explicit imports. Do not expose JPA entities as API contracts.
+- Prefer constructor injection (using Lombok `@RequiredArgsConstructor` on final fields for straightforward dependency injection), immutable API payloads (`record`), and explicit imports. Do not expose JPA entities as API contracts.
 
 ## Object Mapping — Mandatory
 

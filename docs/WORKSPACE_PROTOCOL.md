@@ -10,9 +10,9 @@ Repository code, types, module interfaces, executable commands, tests, examples,
 and runtime evidence hold current implementation knowledge. Product intent,
 rationale, and accepted constraints remain with their repository owners.
 Use the [root README](../README.md), [repository guide](../AGENTS.md), and the
-available app-specific guides to find relevant sources. Currently `apps/api/`
-is the only application; its [README](../apps/api/README.md) and
-[instructions](../apps/api/AGENTS.md) describe the scaffold and its limits.
+available app-specific guides to find relevant sources. Currently `apps/api/` is the only application; its [README](../apps/api/README.md) and
+[instructions](../apps/api/AGENTS.md) describe the backend implementation, prepared
+telegram-echo integration, and limits.
 [LifeOS_PRD.md](LifeOS_PRD.md) holds intended product behavior. There is no
 `apps/web/`, `infra/`, or `docs/architecture/` tree yet. Link to existing
 knowledge rather than reproduce it in a new summary.

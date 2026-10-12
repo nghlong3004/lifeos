@@ -13,7 +13,8 @@ Preserve unrelated edits, untracked work, and private installation/session state
 Use [README.md](README.md) for current repository status and
 [docs/LifeOS_PRD.md](docs/LifeOS_PRD.md) for intended product behavior. Code,
 configuration, and tests establish implementation; dependencies or PRD acceptance
-criteria do not prove a feature exists. Currently only `apps/api/` is present;
+criteria do not prove a feature exists. Currently `apps/api/` and
+development launcher `scripts/dev-api.sh` are present;
 web and infrastructure are planned.
 
 ## Context Management
