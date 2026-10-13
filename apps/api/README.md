@@ -35,18 +35,24 @@ is no root POM, Java formatter plugin, or checked-in CI workflow.
 `test -Dtest=Telegram*Test,Jackson2ConfigurationTest` runs only the prepared isolated unit tests for the
 Telegram echo package and shared Jackson 2 configuration, excluding the unconfigured `@SpringBootTest` context test.
 `-DskipTests package` compiles and packages without executing tests. It does not
-verify the application context or external integrations. In the agent inspection environment,
-no Java/javac runtime was available, so automated tests, packaging, and formatter checks were not
-executed by the agent. An operator subsequently reported running `scripts/dev-api.sh` manually after
-sourcing SDKMAN initialization (with `~/.sdkman/bin/sdkman-init.sh` as a verified default-layout example;
-see [root prerequisites](../../README.md#running-the-development-api-launcher-telegram-echo)), but the
-exact operator environment, JDK version, build outputs, and automated test execution were not supplied.
+verify the application context or external integrations. In earlier agent inspection, Java/javac was unavailable
+and automated tests were not executed by the agent. For the accepted prerequisite v2 candidate, 19 focused mock tests
+passed offline on Amazon Corretto 25.0.4 and cached Maven 3.10.0. For the accepted sender admission technical implementation,
+offline compilation and focused mock tests were executed using Amazon Corretto 25.0.4 and cached Maven 3.10.0 with empty
+task-specific settings (`mvn -o -s <empty-settings> -gs <empty-settings> test -Dtest=Telegram*Test,Jackson2ConfigurationTest`),
+compiling all 9 main sources and 7 test sources and passing all 79 focused mock tests (0 failures, 0 errors, 0 skipped).
+Full packaging, the unconfigured `@SpringBootTest`, Spring application context startup, and formatter enforcement remain unrun.
+This 79-test source/mock verification is distinct from an operator's earlier historical report of running `scripts/dev-api.sh` manually
+after sourcing SDKMAN initialization (with `~/.sdkman/bin/sdkman-init.sh` as a verified default-layout example; see
+[root prerequisites](../../README.md#running-the-development-api-launcher-telegram-echo)), where the operator's executed
+revision, JDK version, build outputs, and automated test execution were not supplied and no live admission verification was reported.
 
 ## Runtime configuration
 
 [application.yaml](src/main/resources/application.yaml) sets `spring.application.name`
-and binds `lifeos.telegram.bot-token` from `TELEGRAM_BOT_TOKEN` with an empty default.
-A dedicated development profile `telegram-echo` is configured in
+and binds `lifeos.telegram.bot-token` from `TELEGRAM_BOT_TOKEN`, `lifeos.telegram.access-mode`
+from `TELEGRAM_ACCESS_MODE`, and `lifeos.telegram.allowed-user-ids` from `TELEGRAM_ALLOWED_USER_IDS`
+with empty defaults. A dedicated development profile `telegram-echo` is configured in
 [application-telegram-echo.yaml](src/main/resources/application-telegram-echo.yaml)
 to run the minimal plain-text echo route without requiring a database, JPA, Flyway,
 or AI model credentials. There are no checked-in datasource credentials, provider keys,
@@ -61,6 +67,8 @@ load a `.env` file.
 | `SPRING_DATASOURCE_PASSWORD` | Database password |
 | `SPRING_AI_DEEPSEEK_API_KEY` | API key when DeepSeek chat auto-configuration is enabled |
 | `TELEGRAM_BOT_TOKEN` | Bot token for the Telegram plain-text echo integration (`telegram-echo` profile) |
+| `TELEGRAM_ACCESS_MODE` | Sender access control mode (`WHITELIST` or `PUBLIC`, case-sensitive) |
+| `TELEGRAM_ALLOWED_USER_IDS` | Comma-separated positive decimal Telegram user IDs (required for `WHITELIST`) |
 
 DeepSeek property names come from the Spring AI 2.0.1 model auto-configuration
 metadata. The model dependency does not provide a Telegram bot or application
@@ -87,16 +95,20 @@ using the TelegramBots 10.3.0 library:
   Unsafe dependency exception logging in `BotSession` is silenced via configuration
   to prevent token-bearing URLs from reaching application logs.
 - Resource & Lifecycle ownership: `TelegramConfiguration` declares the `TelegramClient`,
-  the owned outbound `OkHttpClient` transport bean (`telegramHttpClient`), a dedicated
-  single-thread scheduler, and the native `TelegramBotsLongPollingApplication`.
-  `TelegramBotLifecycle` manages registration and owns full resource cleanup: on startup failure,
-  stop, or destruction, it releases the session, polling application, background scheduler,
-  and HTTP transport. Transport cleanup requests cancellation of queued and in-flight calls via
-  `dispatcher().cancelAll()`, shuts down the dispatcher `executorService()` so that new tasks are
-  rejected and idle threads can exit, and evicts idle pooled sockets via `connectionPool().evictAll()`.
-  Termination is not awaited (`awaitTermination` is not invoked), and cancellation timing, socket abort
-  completion, and worker exit have not been measured or observed. Registration failures fail startup
-  with sanitized diagnostics (`IllegalStateException` without cause) rather than swallowing errors.
+  the owned outbound `OkHttpClient` transport bean (`telegramHttpClient` returning disposable
+  `TelegramHttpClient`), a dedicated single-thread scheduler, and the native
+  `TelegramBotsLongPollingApplication`. `TelegramBotLifecycle` is session-focused: it manages
+  the `BotSession` (registering, starting, and stopping polling), while shared infrastructure
+  resources are owned by their respective Spring beans (`telegramHttpClient` via `TelegramHttpClient.close()`,
+  `telegramPollingExecutor` via `shutdown()`, and `telegramBotsLongPollingApplication` via `close()`).
+  Transport cleanup requests cancellation of queued and in-flight calls via `dispatcher().cancelAll()`,
+  shuts down the dispatcher `executorService()` so that new tasks are rejected and idle threads can exit,
+  and evicts idle pooled sockets via `connectionPool().evictAll()`. Termination is not awaited
+  (`awaitTermination` is not invoked), and cancellation timing, socket abort completion, and worker exit
+  have not been measured or observed. When the `telegram-echo` profile is active and the bot token is
+  missing or blank, `TelegramBotLifecycle.start()` fails fast by throwing `IllegalStateException`,
+  attempting no registration or network calls. Registration failures clean up partial registrations
+  and fail startup with sanitized diagnostics (`IllegalStateException` without cause).
 - Threading architecture & execution model:
   - Scheduled daemon platform thread: `telegramPollingExecutor` creates a single daemon platform
     thread named `telegram-polling`. Manual thread factories are not auto-converted by Spring Boot.
@@ -107,10 +119,10 @@ using the TelegramBots 10.3.0 library:
     poll cycles.
   - Library-owned non-daemon dispatcher workers: OkHttp 4.12.0 `Dispatcher.executorService` utilizes
     `Util.threadFactory("OkHttp Dispatcher", false)`, spawning non-daemon platform workers for
-    outbound call execution. Lifecycle release calls `dispatcher().cancelAll()` to request cancellation
-    of calls and shuts down the dispatcher executor service so new tasks are rejected; termination is not
-    awaited, cancellation/completion timing remains unobserved, and actual thread exit timing has not been
-    measured at runtime.
+    outbound call execution. Spring bean disposal of `TelegramHttpClient` calls `dispatcher().cancelAll()`
+    to request cancellation of calls and shuts down the dispatcher executor service so new tasks are
+    rejected; termination is not awaited, cancellation/completion timing remains unobserved, and actual
+    thread exit timing has not been measured at runtime.
   - Daemon HTTP housekeeping: OkHttp 4.12.0 `TaskRunner.INSTANCE` utilizes daemon platform threads
     for internal connection cleanup and task execution.
   - Update-ID reduction: `BotSession` update-ID reduction uses `parallelStream()`, which may employ
@@ -123,28 +135,50 @@ using the TelegramBots 10.3.0 library:
     introduced.
 - Process lifetime & shutdown notes: Resource cleanup invokes `ExecutorService.shutdown()`,
   which requests an orderly shutdown of the background polling thread rather than forcibly aborting
-  in-flight socket operations. In-place restarts within the same process lifetime are unsupported;
-  the native library's single registration lifecycle and webhook removal behavior require fresh process
-  startup.
+  in-flight socket operations. `TelegramBotLifecycle` supports session restart compatibility by
+  invoking `BotSession.start()` after `stop()`, though live restart behavior and timing remain
+  unverified.
 - Echo behavior: `TelegramEchoConsumer` echoes incoming regular text messages to the
   originating chat and message thread/topic, preserving exact Unicode, whitespace, and line
-  breaks without markup transformations. Non-text updates and empty messages are ignored.
-  Error handling prevents leaking bot tokens or message content.
-- Verification limits & operational notes: Unit tests were prepared and statically
-  inspected with mocked native components; automated tests, packaging, and formatting were
-  not run by the agent. The agent used no live credentials, started no bot or API process,
-  and made no network connections to `api.telegram.org`. An operator subsequently reported
-  a successful manual launch of `scripts/dev-api.sh` after sourcing SDKMAN initialization,
-  and observed that sending literal "A" to the bot returned an echo of literal "A". This is an
-  operator-reported manual observation, not agent-executed validation; the exact operator
-  command/path, JDK version, executed revision, and runtime logs were not supplied. No live
-  verification was reported for other text cases (Unicode, whitespace/newlines, forum thread IDs,
-  non-text ignoring, or error recovery), threading behavior, or transport cancellation and shutdown
-  timing. Library source inspection indicates that starting long polling calls `deleteWebhook`;
-  manual runs require internet access to `api.telegram.org` and must not contend with an active webhook
-  or another poller for the same token. All threading characteristics describe source-selected behavior;
-  agent runtime thread execution, thread dumps, latencies, and transport cancellation timing remain
-  unobserved.
+  breaks without markup transformations. Non-text updates, updates with null or missing chat IDs,
+  and empty messages are ignored. Error handling prevents leaking bot tokens or message content.
+- Sender admission boundary (`TelegramAccessMode`, `TelegramAdmissionPolicy`):
+  Sender identity is established strictly by positive Telegram sender user ID (`message.from.id`),
+  never by chat ID, username, or message text. Denied updates never reach client send.
+  - `WHITELIST` mode: Restricts admission strictly to positive sender user IDs configured in
+    `lifeos.telegram.allowed-user-ids` (`TELEGRAM_ALLOWED_USER_IDS`). Requires a non-empty, strictly
+    valid comma-separated list of positive decimal IDs <= signed `Long.MAX_VALUE`. Duplicate IDs collapse.
+    Surrounding whitespace per entry is trimmed; signs (`+`/`-`), zero, negatives, non-digits, overflow,
+    empty elements, and leading/trailing separators are rejected. Multiline content preserves permitted
+    surrounding whitespace and validates subsequent lines without discarding invalid remainders.
+  - `PUBLIC` mode: Admits any identified Telegram sender (`message.from.id` present and positive). An absent
+    or empty allowed ID list is permitted; if a non-empty list is supplied, its syntax is strictly validated,
+    but it does not restrict public admission. Public mode is never inferred from an empty list.
+  - Fail closed: Missing, blank, or unknown access modes and syntax errors in allowed user IDs fail closed
+    before polling registration with sanitized property-name diagnostics (`IllegalStateException` naming only
+    `lifeos.telegram.access-mode` or `lifeos.telegram.allowed-user-ids`), without leaking offending values or
+    environment settings.
+  - Diagnostics & protection: `TelegramProperties.toString()` masks both `botToken` and `allowedUserIds`
+    (`[PROTECTED]`), preventing credentials or user lists from leaking in application logs or diagnostics.
+  - Denied updates: Updates missing sender identity (`from == null`, `from.id == null`, or `from.id <= 0`)
+    or unlisted in `WHITELIST` mode are rejected immediately and never reach client send.
+- Verification limits & operational notes: Focused unit tests for the echo package, lifecycle, transport,
+  admission policy, constructor selection, bean wiring, and shared Jackson 2 configuration (79 tests total)
+  were executed offline against mocked native components and passed; native log lines (such as "Telegram
+  long-polling session started") arise from mocked lifecycle tests, not live sessions. The agent used no live credentials,
+  started no real bot or Spring application context, and made no network connections to `api.telegram.org`.
+  Live transport execution and transport shutdown completion timing remain unobserved. An isolated offline scheduler
+  test creates the actual repository scheduler, executes a harmless task, and observes `telegram-polling`, daemon status,
+  and `isVirtual=false`; it does not use a real bot, polling, session, or transport. Live bot thread allocation/thread dumps,
+  network latencies, and transport cancellation/termination timing remain unobserved. An operator independently
+  reported a successful manual launch of `scripts/dev-api.sh` after sourcing SDKMAN initialization, and observed
+  that sending literal "A" to the bot returned an echo of literal "A". This historical operator observation is kept
+  strictly distinct from the 79-test offline source/mock verification; the operator's executed revision, JDK version,
+  command path, and runtime logs were not supplied, and no live verification was reported for sender admission gating,
+  other text cases (Unicode, whitespace/newlines, forum thread IDs, non-text ignoring, or error recovery), live thread behavior,
+  or live transport cancellation and shutdown timing. Library source inspection indicates that starting long polling
+  calls `deleteWebhook`; manual runs require internet access to `api.telegram.org` and must not contend with an active
+  webhook or another poller for the same token. All other threading characteristics describe source-selected behavior.
 
 Once an appropriate database and enabled provider configuration are supplied,
 the launch command is:

@@ -1,5 +1,6 @@
 package me.nghlong3004.lifeos.telegram;
 
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -9,7 +10,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @since 10/12/2026
  */
 @ConfigurationProperties(prefix = "lifeos.telegram")
-public record TelegramProperties(String botToken) {
+public record TelegramProperties(
+    String botToken,
+    String accessMode,
+    String allowedUserIds) {
 
   /**
    * Returns whether a non-blank bot token is configured.
@@ -21,7 +25,13 @@ public record TelegramProperties(String botToken) {
   }
 
   @Override
-  public String toString() {
-    return "TelegramProperties[botToken=" + (hasValidToken() ? "[PROTECTED]" : "[EMPTY]") + "]";
+  public @NonNull String toString() {
+    return "TelegramProperties[botToken="
+        + (hasValidToken() ? "[PROTECTED]" : "[EMPTY]")
+        + ", accessMode="
+        + (accessMode != null && !accessMode.isBlank() ? "[CONFIGURED]" : "[EMPTY]")
+        + ", allowedUserIds="
+        + (allowedUserIds != null && !allowedUserIds.isBlank() ? "[PROTECTED]" : "[EMPTY]")
+        + "]";
   }
 }

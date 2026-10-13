@@ -9,12 +9,14 @@ provides a minimal plain-text Telegram echo integration under
 `me.nghlong3004.lifeos.telegram` activated via the `telegram-echo` profile, supported
 by a shared Jackson 2 mapper configuration under `me.nghlong3004.lifeos.config`.
 `TelegramConfiguration` defines the inspectable bean graph (client, owned `OkHttpClient`
-transport, dedicated single-thread scheduler, and native `TelegramBotsLongPollingApplication`),
+transport, dedicated single-thread scheduler, native `TelegramBotsLongPollingApplication`, and `TelegramAdmissionPolicy`),
 reusing the shared Jackson 2 `ObjectMapper`. Polling and echo execution run serially on a
-dedicated platform thread (`telegram-polling`) without virtual-thread opt-in.
-`TelegramBotLifecycle` manages registration and owns full resource cleanup (session, polling
-application, scheduler, and HTTP transport) across session stop, application destruction, and
-startup failure.
+dedicated platform thread (`telegram-polling`) without virtual-thread opt-in. Incoming messages
+are gated by `TelegramAdmissionPolicy` based strictly on positive sender user ID (`message.from.id`),
+supporting `WHITELIST` and `PUBLIC` modes. `TelegramBotLifecycle` manages the session lifecycle
+(start, stop, restart) and validates admission configuration before polling registration, while Spring
+bean definitions manage their respective resource destruction (polling application, scheduler,
+and `TelegramHttpClient` transport) across shutdown and startup failure.
 Components use Lombok `@RequiredArgsConstructor` for constructor dependency injection.
 Other domain features (habits, finances, AI model tools, custom security) remain
 unimplemented. `pom.xml` declares integrations; source and tests determine which

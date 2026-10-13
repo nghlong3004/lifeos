@@ -29,9 +29,16 @@ public class TelegramConfiguration {
 
   @Bean
   @Profile("telegram-echo")
+  @ConditionalOnMissingBean(TelegramAdmissionPolicy.class)
+  public TelegramAdmissionPolicy telegramAdmissionPolicy(TelegramProperties properties) {
+    return TelegramAdmissionPolicy.from(properties);
+  }
+
+  @Bean(destroyMethod = "close")
+  @Profile("telegram-echo")
   @ConditionalOnMissingBean(OkHttpClient.class)
   public OkHttpClient telegramHttpClient() {
-    return new OkHttpClient();
+    return new TelegramHttpClient();
   }
 
   @Bean

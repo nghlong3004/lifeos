@@ -1442,7 +1442,7 @@ Các giá trị sau là **mặc định đề xuất cho quá trình thiết k�
 
 | Decision | Proposed Default | Status |
 |---|---|---|
-| Số user | Single-user được whitelist Telegram ID, schema có owner để mở rộng | Cần xác nhận |
+| Số user | Minimal echo hỗ trợ cấu hình WHITELIST (danh sách Telegram ID người gửi) hoặc PUBLIC (mọi sender ID hợp lệ); schema DB đa người dùng, bảng User và onboarding mở rộng vẫn tạm hoãn | Đã giải quyết cho minimal echo; mở rộng cần xác nhận |
 | Morning / evening reminder | Cấu hình khi onboarding; ví dụ 07:00 / 22:30, không hardcode | Cần xác nhận |
 | Tài khoản và currency | Nhiều account cùng VND; chưa hỗ trợ đa tiền tệ | Cần xác nhận |
 | Ghi expense rõ ràng | Tự ghi + Undo; mơ hồ/nhạy cảm phải hỏi/xác nhận | Cần xác nhận |

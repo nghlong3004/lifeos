@@ -21,6 +21,8 @@
 # - JDK 25 (or compatible newer major): both runtime ('java') and compiler ('javac')
 #   located via JAVA_HOME or available on PATH.
 # - TELEGRAM_BOT_TOKEN: must be non-blank in .env.
+# - TELEGRAM_ACCESS_MODE: must be 'WHITELIST' or 'PUBLIC' in .env.
+# - TELEGRAM_ALLOWED_USER_IDS: comma-separated positive 64-bit Long IDs (required for WHITELIST).
 #
 # Maven Wrapper:
 # Executes 'sh ./mvnw spring-boot:run -Dspring-boot.run.profiles=telegram-echo'.
@@ -62,6 +64,82 @@ if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_BOT_TOKEN//[[:space:]]/}
   echo "Error: TELEGRAM_BOT_TOKEN is missing or blank." >&2
   echo "Please configure TELEGRAM_BOT_TOKEN in .env with a valid bot token." >&2
   exit 1
+fi
+
+# Validate access control mode (TELEGRAM_ACCESS_MODE)
+ACCESS_MODE="${TELEGRAM_ACCESS_MODE:-}"
+ACCESS_MODE="${ACCESS_MODE#"${ACCESS_MODE%%[![:space:]]*}"}"
+ACCESS_MODE="${ACCESS_MODE%"${ACCESS_MODE##*[![:space:]]}"}"
+
+if [ -z "$ACCESS_MODE" ]; then
+  echo "Error: TELEGRAM_ACCESS_MODE is missing or blank." >&2
+  echo "Supported access modes are 'WHITELIST' or 'PUBLIC' (case-sensitive)." >&2
+  exit 1
+fi
+
+if [ "$ACCESS_MODE" != "WHITELIST" ] && [ "$ACCESS_MODE" != "PUBLIC" ]; then
+  echo "Error: TELEGRAM_ACCESS_MODE has an invalid value." >&2
+  echo "Supported access modes are 'WHITELIST' or 'PUBLIC' (case-sensitive)." >&2
+  exit 1
+fi
+
+# Validate allowed user IDs (TELEGRAM_ALLOWED_USER_IDS)
+RAW_USER_IDS="${TELEGRAM_ALLOWED_USER_IDS:-}"
+TRIMMED_USER_IDS="${RAW_USER_IDS#"${RAW_USER_IDS%%[![:space:]]*}"}"
+TRIMMED_USER_IDS="${TRIMMED_USER_IDS%"${TRIMMED_USER_IDS##*[![:space:]]}"}"
+
+if [ "$ACCESS_MODE" = "WHITELIST" ] && [ -z "$TRIMMED_USER_IDS" ]; then
+  echo "Error: TELEGRAM_ALLOWED_USER_IDS is required and must not be empty when TELEGRAM_ACCESS_MODE is 'WHITELIST'." >&2
+  echo "Please configure TELEGRAM_ALLOWED_USER_IDS in .env with comma-separated positive Telegram user IDs." >&2
+  exit 1
+fi
+
+if [ -n "$TRIMMED_USER_IDS" ]; then
+  if [[ "$TRIMMED_USER_IDS" == ,* ]] || [[ "$TRIMMED_USER_IDS" == *, ]]; then
+    echo "Error: TELEGRAM_ALLOWED_USER_IDS contains invalid leading or trailing separator." >&2
+    exit 1
+  fi
+
+  # Parse entire comma-separated content without multiline truncation
+  ID_ARRAY=()
+  rem="$TRIMMED_USER_IDS"
+  while [[ "$rem" == *,* ]]; do
+    ID_ARRAY+=("${rem%%,*}")
+    rem="${rem#*,}"
+  done
+  ID_ARRAY+=("$rem")
+
+  if [ ${#ID_ARRAY[@]} -eq 0 ]; then
+    echo "Error: TELEGRAM_ALLOWED_USER_IDS contains no valid entries." >&2
+    exit 1
+  fi
+
+  for entry in "${ID_ARRAY[@]}"; do
+    entry_trimmed="${entry#"${entry%%[![:space:]]*}"}"
+    entry_trimmed="${entry_trimmed%"${entry_trimmed##*[![:space:]]}"}"
+
+    if [ -z "$entry_trimmed" ]; then
+      echo "Error: TELEGRAM_ALLOWED_USER_IDS contains an empty ID element." >&2
+      exit 1
+    fi
+
+    if [[ ! "$entry_trimmed" =~ ^[0-9]+$ ]]; then
+      echo "Error: TELEGRAM_ALLOWED_USER_IDS contains non-digit characters or signs. Entries must be unsigned positive integers." >&2
+      exit 1
+    fi
+
+    entry_norm="${entry_trimmed#"${entry_trimmed%%[!0]*}"}"
+    if [ -z "$entry_norm" ]; then
+      echo "Error: TELEGRAM_ALLOWED_USER_IDS contains zero. User IDs must be strictly positive." >&2
+      exit 1
+    fi
+
+    entry_len=${#entry_norm}
+    if (( entry_len > 19 )) || { (( entry_len == 19 )) && [[ "$entry_norm" > "9223372036854775807" ]]; }; then
+      echo "Error: TELEGRAM_ALLOWED_USER_IDS contains a value exceeding the signed 64-bit integer range." >&2
+      exit 1
+    fi
+  done
 fi
 
 # Locate Java runtime (java) and compiler (javac) under JAVA_HOME or PATH

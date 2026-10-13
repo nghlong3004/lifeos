@@ -5,3 +5,5 @@ spring:
 lifeos:
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
+    access-mode: ${TELEGRAM_ACCESS_MODE:}
+    allowed-user-ids: ${TELEGRAM_ALLOWED_USER_IDS:}

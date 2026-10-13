@@ -17,7 +17,9 @@ current entry points. The app contains a Spring Boot entry point, a
 context-loading test, and a minimal plain-text Telegram echo integration in
 `me.nghlong3004.lifeos.telegram` (`telegram-echo` profile) driven by a dedicated
 single-thread platform scheduler and owned `OkHttpClient` transport, supported by
-shared Jackson 2 mapper configuration in `me.nghlong3004.lifeos.config`. Other domain features,
+shared Jackson 2 mapper configuration in `me.nghlong3004.lifeos.config`. Incoming
+messages are gated by `TelegramAdmissionPolicy` strictly using positive Telegram sender
+user IDs (`message.from.id`) in `WHITELIST` or `PUBLIC` mode. Other domain features,
 custom security, migrations, and tools are not implemented; `.agents/context/api/`
 does not exist.
 
@@ -86,7 +88,11 @@ Do not force updates for cosmetic edits or bug fixes that leave existing context
 
 ## Gotchas
 
-- `application.yaml` sets the application name and `lifeos.telegram.bot-token` (`TELEGRAM_BOT_TOKEN`); `application-telegram-echo.yaml` configures the minimal echo profile. Declared PostgreSQL, AI, security, and Testcontainers dependencies do not supply credentials, authorization policy, or fixtures.
+- `application.yaml` sets the application name, `lifeos.telegram.bot-token` (`TELEGRAM_BOT_TOKEN`),
+  `lifeos.telegram.access-mode` (`TELEGRAM_ACCESS_MODE`), and `lifeos.telegram.allowed-user-ids`
+  (`TELEGRAM_ALLOWED_USER_IDS`); `application-telegram-echo.yaml` configures the minimal echo profile.
+  Declared PostgreSQL, AI, security, and Testcontainers dependencies do not supply credentials,
+  authorization policy, or fixtures.
 - Do not infer runtime success or an endpoint contract from starter dependencies. Verify effects in an appropriately configured environment and report untested integrations.
 
 ## Examples

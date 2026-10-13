@@ -9,43 +9,57 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 /**
- * Telegram update consumer for the minimal plain-text echo integration.
- * Receives incoming updates, checks for regular text messages, and echoes back
- * the exact incoming text to the originating chat and message thread/topic.
- * Uses Lombok {@link RequiredArgsConstructor} for constructor injection.
+ * Consumes incoming Telegram updates, verifies sender admission, and echoes plain-text messages
+ * back to their originating chat and message thread.
  *
  * @author nghlong3004 (Long Nguyen Hoang)
  * @since 10/12/2026
  */
+@Slf4j
 @Component
 @Profile("telegram-echo")
 @RequiredArgsConstructor
-@Slf4j
 public class TelegramEchoConsumer implements LongPollingUpdateConsumer {
 
   private final TelegramClient telegramClient;
+  private final TelegramAdmissionPolicy admissionPolicy;
 
   @Override
   public void consume(List<Update> updates) {
-    if (updates == null || updates.isEmpty()) {
-      return;
-    }
-    for (Update update : updates) {
-      consume(update);
+    if (updates != null) {
+      updates.forEach(this::consumeUpdate);
     }
   }
 
-  /**
-   * Consumes a single update, extracting text and echoing it back if valid.
-   *
-   * @param update the incoming Telegram update
-   */
-  public void consume(Update update) {
+  private void consumeUpdate(Update update) {
+    if (!isAuthorized(update)) {
+      return;
+    }
     createEchoMessage(update).ifPresent(this::sendEchoMessage);
+  }
+
+  private boolean isAuthorized(Update update) {
+    if (update == null || !update.hasMessage()) {
+      return false;
+    }
+
+    Message message = update.getMessage();
+    if (message == null) {
+      return false;
+    }
+
+    User from = message.getFrom();
+    if (from == null) {
+      return false;
+    }
+
+    Long senderId = from.getId();
+    return admissionPolicy.isAdmitted(senderId);
   }
 
   private Optional<SendMessage> createEchoMessage(Update update) {
@@ -54,10 +68,7 @@ public class TelegramEchoConsumer implements LongPollingUpdateConsumer {
     }
 
     Message message = update.getMessage();
-    if (message == null
-        || !message.hasText()
-        || message.getChat() == null
-        || message.getChat().getId() == null) {
+    if (message == null || message.getChat() == null || message.getChat().getId() == null) {
       return Optional.empty();
     }
 
@@ -66,16 +77,12 @@ public class TelegramEchoConsumer implements LongPollingUpdateConsumer {
       return Optional.empty();
     }
 
-    Long chatId = message.getChat().getId();
-
     SendMessage.SendMessageBuilder<?, ?> builder =
-        SendMessage.builder()
-            .chatId(chatId.toString())
-            .text(text);
+        SendMessage.builder().chatId(message.getChat().getId().toString()).text(text);
 
-    Integer messageThreadId = message.getMessageThreadId();
-    if (messageThreadId != null) {
-      builder.messageThreadId(messageThreadId);
+    Integer threadId = message.getMessageThreadId();
+    if (threadId != null) {
+      builder.messageThreadId(threadId);
     }
 
     return Optional.of(builder.build());
@@ -85,7 +92,6 @@ public class TelegramEchoConsumer implements LongPollingUpdateConsumer {
     try {
       telegramClient.execute(echoMessage);
     } catch (Exception e) {
-      // Handle send failures without leaking bot token or message contents
       log.error("Failed to send Telegram echo message: {}", e.getClass().getSimpleName());
     }
   }
