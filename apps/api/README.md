@@ -35,9 +35,12 @@ is no root POM, Java formatter plugin, or checked-in CI workflow.
 `test -Dtest=Telegram*Test,Jackson2ConfigurationTest` runs only the prepared isolated unit tests for the
 Telegram echo package and shared Jackson 2 configuration, excluding the unconfigured `@SpringBootTest` context test.
 `-DskipTests package` compiles and packages without executing tests. It does not
-verify the application context or external integrations. No Java runtime was
-available in the inspection environment, so tests have been prepared and statically
-inspected against dependency metadata rather than executed at runtime.
+verify the application context or external integrations. In the agent inspection environment,
+no Java/javac runtime was available, so automated tests, packaging, and formatter checks were not
+executed by the agent. An operator subsequently reported running `scripts/dev-api.sh` manually after
+sourcing SDKMAN initialization (with `~/.sdkman/bin/sdkman-init.sh` as a verified default-layout example;
+see [root prerequisites](../../README.md#running-the-development-api-launcher-telegram-echo)), but the
+exact operator environment, JDK version, build outputs, and automated test execution were not supplied.
 
 ## Runtime configuration
 
@@ -128,13 +131,20 @@ using the TelegramBots 10.3.0 library:
   breaks without markup transformations. Non-text updates and empty messages are ignored.
   Error handling prevents leaking bot tokens or message content.
 - Verification limits & operational notes: Unit tests were prepared and statically
-  inspected with mocked native components. No Java runtime was available to run tests,
-  and no live Telegram polling session, network connection, or live credentials were
-  used or verified. Library source inspection indicates that starting long polling calls
-  `deleteWebhook`; future manual runs require internet access to `api.telegram.org` and
-  must not contend with an active webhook or another poller for the same token. All threading
-  characteristics describe source-selected behavior; runtime threading execution, thread dumps,
-  latencies, and transport cancellation timing remain unobserved.
+  inspected with mocked native components; automated tests, packaging, and formatting were
+  not run by the agent. The agent used no live credentials, started no bot or API process,
+  and made no network connections to `api.telegram.org`. An operator subsequently reported
+  a successful manual launch of `scripts/dev-api.sh` after sourcing SDKMAN initialization,
+  and observed that sending literal "A" to the bot returned an echo of literal "A". This is an
+  operator-reported manual observation, not agent-executed validation; the exact operator
+  command/path, JDK version, executed revision, and runtime logs were not supplied. No live
+  verification was reported for other text cases (Unicode, whitespace/newlines, forum thread IDs,
+  non-text ignoring, or error recovery), threading behavior, or transport cancellation and shutdown
+  timing. Library source inspection indicates that starting long polling calls `deleteWebhook`;
+  manual runs require internet access to `api.telegram.org` and must not contend with an active webhook
+  or another poller for the same token. All threading characteristics describe source-selected behavior;
+  agent runtime thread execution, thread dumps, latencies, and transport cancellation timing remain
+  unobserved.
 
 Once an appropriate database and enabled provider configuration are supplied,
 the launch command is:

@@ -54,16 +54,20 @@ development scripts:
     cancellation timing remain unobserved.
 
 > [!NOTE]
-> **Static inspection status and limits**:
+> **Static inspection and runtime verification status**:
 > Root environment templates (`.env.example`, `.env`), ignore rules (`.gitignore`), and the
 > development launcher (`scripts/dev-api.sh`) have passed static review.
 > Backend Telegram echo source and offline tests in `apps/api/` have been accepted
 > under static inspection.
 >
-> Java was unavailable in the verification environment; Maven builds, test suite execution
-> (including `@SpringBootTest` and offline unit tests), and formatter checks were **not run**.
-> Neither `scripts/dev-api.sh` nor the Spring Boot API or Telegram bot has been executed,
-> and live Telegram echo behavior against Telegram endpoints remains **unexercised**.
+> In earlier agent verification, Java/Javac was unavailable; automated Maven builds, test suite
+> execution (including `@SpringBootTest` and offline unit tests), and formatter checks were **not run**.
+> Subsequently, an operator reported successful manual execution of `scripts/dev-api.sh` after
+> sourcing SDKMAN environment initialization in their shell, observing that sending literal `A`
+> returned literal `A`. This is an operator-reported manual observation rather than agent-executed
+> validation; exact operator initialization command/path, JDK version, executed revision, and build
+> outputs were not supplied. Live behavior for other text cases, threading concurrency, and
+> shutdown/cancellation timing remains unexercised and unverified by automated checks.
 
 ### Planned product capabilities
 
@@ -137,6 +141,11 @@ with the dedicated `telegram-echo` Spring profile:
    - Bash shell.
    - JDK 25 target (or compatible newer major): both runtime (`java`) and compiler
      (`javac`) available under `JAVA_HOME` or on `PATH`.
+   - *SDKMAN-managed JDKs (optional)*: If using an SDKMAN-managed JDK, the same shell
+     needs SDKMAN initialization to expose the installed JDK via `JAVA_HOME` and `PATH`
+     (verified default-layout example: `source "$HOME/.sdkman/bin/sdkman-init.sh"`, adapt
+     for your actual installation path). SDKMAN is an option for managing JDKs, not
+     mandatory for all environments.
 4. **Execution**:
    - When running from the repository root:
      ```sh
@@ -166,9 +175,11 @@ with the dedicated `telegram-echo` Spring profile:
   `telegram-echo` profile route. First Maven use will download Maven 3.10.0 and project
   dependencies from Maven repositories.
 - **Status**: Root environment templates and the development launcher passed static review,
-  and backend echo source in `apps/api/` was accepted under static inspection. Because Java
-  was unavailable in the environment, builds and tests were not run, and neither the launcher
-  nor the API/bot was executed. Live Telegram echo interaction remains unexercised.
+  and backend echo source in `apps/api/` was accepted under static inspection. In earlier agent
+  verification, Java was unavailable so automated builds and tests were not run. An operator
+  subsequently reported successful manual launch of `scripts/dev-api.sh` (after shell SDKMAN
+  initialization) with live echo verified for literal `A` -> `A`. Other message scenarios, full
+  automated build/test suites, and shutdown timing remain unverified.
 
 ## Repository guidance
 
